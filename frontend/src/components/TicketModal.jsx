@@ -9,6 +9,10 @@ const TicketModal = ({ ticket, members, onClose }) => {
   const [aiMode, setAiMode] = useState('help');
   const [status, setStatus] = useState(ticket.status);
   const [assignedTo, setAssignedTo] = useState(ticket.assigned_to_id || 0);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedTitle, setEditedTitle] = useState(ticket.title);
+  const [editedDescription, setEditedDescription] = useState(ticket.description || '');
+
 
 
   useEffect(() => {
@@ -70,7 +74,39 @@ const TicketModal = ({ ticket, members, onClose }) => {
     } catch (err) { console.error(err); }
   };
 
+  const handleSave = async () => {
+    try {
+      await fetch(`http://127.0.0.1:8000/ticket/${ticket.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({ 
+          title: editedTitle, 
+          description: editedDescription 
+        }),
+      });
+      setIsEditing(false);
+      // We don't need to fetch tickets here because onClose calls fetchTickets in KanbanBoard
+    } catch (err) { console.error(err); }
+  };
+
+  const handleDelete = async () => {
+    if (!window.confirm('Are you sure you want to delete this task? This action cannot be undone.')) return;
+    try {
+      const resp = await fetch(`http://127.0.0.1:8000/ticket/${ticket.id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      });
+      if (resp.ok) {
+        onClose();
+      }
+    } catch (err) { console.error(err); }
+  };
+
   const runAiAssistant = async () => {
+
 
     setIsAiLoading(true);
     setAiResult('');
@@ -107,7 +143,16 @@ const TicketModal = ({ ticket, members, onClose }) => {
 
         <div className="modal-body">
           <section>
-            <h1 style={{ fontSize: '24px', fontWeight: 600, marginBottom: '16px' }}>{ticket.title}</h1>
+            {isEditing ? (
+              <input 
+                value={editedTitle} 
+                onChange={(e) => setEditedTitle(e.target.value)}
+                style={{ fontSize: '24px', fontWeight: 600, marginBottom: '16px', width: '100%', background: 'transparent', border: '1px solid var(--border-color)', color: 'white' }}
+              />
+            ) : (
+              <h1 style={{ fontSize: '24px', fontWeight: 600, marginBottom: '16px' }}>{editedTitle}</h1>
+            )}
+
             <div style={{ display: 'flex', gap: '32px', marginBottom: '24px', alignItems: 'center' }}>
               <div className="form-group" style={{ marginBottom: 0 }}>
                 <span className="form-label" style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>STATUS</span>
@@ -137,10 +182,31 @@ const TicketModal = ({ ticket, members, onClose }) => {
             </div>
 
 
-            <div style={{ padding: '16px', backgroundColor: 'var(--card-bg)', borderRadius: '8px', border: '1px solid var(--border-color)', fontSize: '14px', lineHeight: '1.6', color: '#cecfd1' }}>
-              {ticket.description || 'No description provided.'}
+            <div className="form-group">
+              <span className="form-label" style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>DESCRIPTION</span>
+              {isEditing ? (
+                <textarea 
+                  value={editedDescription} 
+                  onChange={(e) => setEditedDescription(e.target.value)}
+                  style={{ minHeight: '120px', width: '100%', padding: '12px' }}
+                />
+              ) : (
+                <div style={{ padding: '16px', backgroundColor: 'var(--card-bg)', borderRadius: '8px', border: '1px solid var(--border-color)', fontSize: '14px', lineHeight: '1.6', color: '#cecfd1' }}>
+                  {editedDescription || 'No description provided.'}
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', gap: '12px', marginTop: '16px' }}>
+              {isEditing ? (
+                <button onClick={handleSave} className="btn-primary" style={{ width: 'auto' }}>Save Changes</button>
+              ) : (
+                <button onClick={() => setIsEditing(true)} className="btn-primary" style={{ width: 'auto', backgroundColor: 'var(--card-bg)', border: '1px solid var(--border-color)' }}>Edit Task</button>
+              )}
+              <button onClick={handleDelete} className="btn-primary" style={{ width: 'auto', backgroundColor: '#3a1111', color: '#ff4d4d', border: '1px solid #5a1a1a' }}>Delete Task</button>
             </div>
           </section>
+
 
           <section style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
             <h3 className="form-label" style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '8px', marginBottom: '16px' }}>Activity</h3>

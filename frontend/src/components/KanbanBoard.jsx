@@ -6,6 +6,11 @@ const KanbanBoard = ({ sprintId, members }) => {
   const [selectedTicket, setSelectedTicket] = useState(null);
   const [assigneeFilter, setAssigneeFilter] = useState('all');
   const [loading, setLoading] = useState(true);
+  const [creatingInColumn, setCreatingInColumn] = useState(null); // Just for simple inline titles if needed elsewhere
+  const [showDetailedAdd, setShowDetailedAdd] = useState(false);
+  const [newTicket, setNewTicket] = useState({ title: '', description: '', priority: 'medium' });
+
+
 
 
   useEffect(() => {
@@ -104,6 +109,34 @@ const KanbanBoard = ({ sprintId, members }) => {
     return (first + last).toUpperCase();
   };
 
+  const handleAddDetailedTask = async () => {
+    if (!newTicket.title.trim()) return;
+
+    try {
+      const response = await fetch(`http://127.0.0.1:8000/sprint/${sprintId}/tickets`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({ 
+          ...newTicket,
+          status: 'todo'
+        })
+      });
+
+      if (response.ok) {
+        setNewTicket({ title: '', description: '', priority: 'medium' });
+        setShowDetailedAdd(false);
+        fetchTickets();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+
+
   if (loading) return <div>Loading board...</div>;
 
   return (
@@ -132,7 +165,7 @@ const KanbanBoard = ({ sprintId, members }) => {
           onDragOver={handleDragOver}
           onDrop={(e) => handleDrop(e, col.id)}
         >
-          <div className="column-header">
+          <div className="column-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <h3 className="column-title">
               <span style={{ fontSize: '10px' }}>{col.icon}</span>
               {col.title}
@@ -140,7 +173,58 @@ const KanbanBoard = ({ sprintId, members }) => {
                 {filteredTickets.filter(t => t.status === col.id).length}
               </span>
             </h3>
+            {col.id === 'todo' && (
+              <button 
+                onClick={() => setShowDetailedAdd(!showDetailedAdd)}
+                style={{ 
+                  background: 'var(--accent-primary)', 
+                  border: 'none', 
+                  color: 'white', 
+                  borderRadius: '4px', 
+                  padding: '2px 8px', 
+                  fontSize: '18px', 
+                  cursor: 'pointer',
+                  lineHeight: '1'
+                }}
+                title="Add Task"
+              >+</button>
+            )}
           </div>
+
+          {col.id === 'todo' && showDetailedAdd && (
+            <div className="ticket-card" style={{ marginBottom: '16px', border: '1px solid var(--accent-primary)', padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <input 
+                placeholder="Task title..." 
+                className="filter-select"
+                style={{ width: '100%', background: 'transparent' }}
+                value={newTicket.title}
+                onChange={(e) => setNewTicket({ ...newTicket, title: e.target.value })}
+              />
+              <textarea 
+                placeholder="Description..." 
+                className="filter-select"
+                style={{ width: '100%', background: 'transparent', minHeight: '60px', fontSize: '12px' }}
+                value={newTicket.description}
+                onChange={(e) => setNewTicket({ ...newTicket, description: e.target.value })}
+              />
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <select 
+                  className={`priority-select priority-${newTicket.priority}`}
+                  value={newTicket.priority}
+                  onChange={(e) => setNewTicket({ ...newTicket, priority: e.target.value })}
+                >
+                  <option value="high">High</option>
+                  <option value="medium">Med</option>
+                  <option value="low">Low</option>
+                </select>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                   <button onClick={() => setShowDetailedAdd(false)} className="btn-primary" style={{ background: 'transparent', border: 'none', fontSize: '12px', width: 'auto' }}>Cancel</button>
+                   <button onClick={handleAddDetailedTask} className="btn-primary" style={{ width: 'auto', padding: '4px 12px', fontSize: '12px' }}>Create</button>
+                </div>
+              </div>
+            </div>
+          )}
+
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', minHeight: '100px' }}>
             {filteredTickets.filter(t => t.status === col.id).map(ticket => {
@@ -177,7 +261,46 @@ const KanbanBoard = ({ sprintId, members }) => {
                 </div>
               );
             })}
+
+            {creatingInColumn === col.id ? (
+              <div className="ticket-card" style={{ padding: '8px', borderStyle: 'dashed' }}>
+                <input 
+                  autoFocus
+                  className="filter-select"
+                  style={{ width: '100%', marginBottom: '8px', background: 'transparent', border: '1px solid var(--border-color)' }}
+                  placeholder="Task title..."
+                  value={newTicketTitle}
+                  onChange={(e) => setNewTicketTitle(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleAddTask(col.id);
+                    if (e.key === 'Escape') setCreatingInColumn(null);
+                  }}
+                  onBlur={() => handleAddTask(col.id)}
+                />
+              </div>
+            ) : (
+              <button 
+                className="add-task-btn" 
+                onClick={() => setCreatingInColumn(col.id)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--text-secondary)',
+                  fontSize: '13px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '8px',
+                  cursor: 'pointer',
+                  opacity: 0.6,
+                  transition: 'opacity 0.2s'
+                }}
+              >
+                <span>+</span> Add Task
+              </button>
+            )}
           </div>
+
         </div>
       ))}
 

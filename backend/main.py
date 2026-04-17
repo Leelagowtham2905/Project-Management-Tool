@@ -44,9 +44,12 @@ class SprintCreate(BaseModel):
     goal: str
 
 class TicketUpdate(BaseModel):
-    status: str = None
-    priority: str = None
+    title: Optional[str] = None
+    description: Optional[str] = None
+    status: Optional[str] = None
+    priority: Optional[str] = None
     assigned_to_id: Optional[int] = None
+
 
 class CommentCreate(BaseModel):
     content: str
@@ -171,9 +174,24 @@ async def create_sprint(sprint_data: SprintCreate, db: Session = Depends(get_db)
 @app.get("/sprint/{id}/tickets")
 def get_tickets(id: int, db: Session = Depends(get_db)):
     current_user = db.query(models.User).first()
-
     tickets = db.query(models.Ticket).filter(models.Ticket.sprint_id == id).all()
     return tickets
+
+@app.post("/sprint/{id}/tickets")
+def create_ticket(id: int, ticket_data: TicketUpdate, db: Session = Depends(get_db)):
+    current_user = db.query(models.User).first()
+    new_ticket = models.Ticket(
+        sprint_id=id,
+        title=ticket_data.title or "New Task",
+        description=ticket_data.description or "",
+        status=ticket_data.status or "todo",
+        priority=ticket_data.priority or "medium"
+    )
+    db.add(new_ticket)
+    db.commit()
+    db.refresh(new_ticket)
+    return new_ticket
+
 
 @app.get("/project/{project_id}/sprints")
 def get_sprints(project_id: int, db: Session = Depends(get_db)):
@@ -190,17 +208,31 @@ def update_ticket(id: int, ticket_data: TicketUpdate, db: Session = Depends(get_
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket not found")
     
+    if ticket_data.title:
+        ticket.title = ticket_data.title
+    if ticket_data.description:
+        ticket.description = ticket_data.description
     if ticket_data.status:
         ticket.status = ticket_data.status
     if ticket_data.priority:
         ticket.priority = ticket_data.priority
     if ticket_data.assigned_to_id is not None:
-        # If assigned_to_id is 0, we can treat it as unassigning
         ticket.assigned_to_id = ticket_data.assigned_to_id if ticket_data.assigned_to_id > 0 else None
         
     db.commit()
     db.refresh(ticket)
     return ticket
+
+@app.delete("/ticket/{id}")
+def delete_ticket(id: int, db: Session = Depends(get_db)):
+    # Since we are in auth-less mode, we just find and delete
+    ticket = db.query(models.Ticket).filter(models.Ticket.id == id).first()
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    db.delete(ticket)
+    db.commit()
+    return {"message": "Ticket deleted"}
+
 
 @app.post("/ticket/{id}/comment")
 def add_comment(id: int, comment_data: CommentCreate, db: Session = Depends(get_db)):
