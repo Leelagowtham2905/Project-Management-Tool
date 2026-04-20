@@ -17,15 +17,15 @@ class Status(str, enum.Enum):
     in_progress = "in_progress"
     done = "done"
 
-from sqlalchemy import Table
+class ProjectMembership(Base):
+    __tablename__ = "project_memberships"
+    user_id = Column(Integer, ForeignKey('users.id'), primary_key=True)
+    project_id = Column(Integer, ForeignKey('projects.id'), primary_key=True)
+    role = Column(String, default="Developer") # e.g. "Frontend Developer", "Backend Developer"
+    
+    user = relationship("User", back_populates="memberships")
+    project = relationship("Project", back_populates="memberships")
 
-# Association table for User-Project many-to-many relationship
-project_members = Table(
-    'project_members',
-    Base.metadata,
-    Column('user_id', Integer, ForeignKey('users.id'), primary_key=True),
-    Column('project_id', Integer, ForeignKey('projects.id'), primary_key=True)
-)
 
 class User(Base):
     __tablename__ = "users"
@@ -36,7 +36,9 @@ class User(Base):
     
     # Relationships
     owned_projects = relationship("Project", back_populates="owner")
-    projects = relationship("Project", secondary=project_members, back_populates="members")
+    memberships = relationship("ProjectMembership", back_populates="user")
+    projects = relationship("Project", secondary="project_memberships", back_populates="members", viewonly=True)
+
     sprints = relationship("Sprint", back_populates="user")
     comments = relationship("Comment", back_populates="user")
 
@@ -50,7 +52,9 @@ class Project(Base):
     
     # Relationships
     owner = relationship("User", back_populates="owned_projects")
-    members = relationship("User", secondary=project_members, back_populates="projects")
+    memberships = relationship("ProjectMembership", back_populates="project")
+    members = relationship("User", secondary="project_memberships", back_populates="projects", viewonly=True)
+
     sprints = relationship("Sprint", back_populates="project")
 
 
@@ -78,6 +82,10 @@ class Ticket(Base):
     description = Column(String)
     priority = Column(Enum(Priority), default=Priority.medium)
     status = Column(Enum(Status), default=Status.todo)
+    due_date = Column(DateTime, nullable=True)
+    is_risky = Column(Boolean, default=False)
+    risk_reason = Column(String, nullable=True)
+
     
     # Relationships
     sprint = relationship("Sprint", back_populates="tickets")
@@ -97,31 +105,8 @@ class Comment(Base):
     user = relationship("User", back_populates="comments")
 
 def init_db():
-    import auth
-    session = SessionLocal()
-    try:
-        # Check if users already exist
-        emails = ["leelagowtham5@gmail.com", "govind09@gail.com"]
-        for email in emails:
-            user = session.query(User).filter(User.email == email).first()
-            password = "Nandhu@1264" if email == "leelagowtham5@gmail.com" else "Govind@3456"
-            hashed = auth.get_password_hash(password)
-            
-            if not user:
-                new_user = User(name="Gowtham" if "leela" in email else "Govind", email=email, password_hash=hashed)
-                session.add(new_user)
-            elif not user.password_hash.startswith("$pbkdf2-sha256$"):  # Check for PBKDF2 hash
-                user.password_hash = hashed
-
-        
-        session.commit()
-    except Exception as e:
-        session.rollback()
-        print(f"Error initializing users: {e}")
-    finally:
-        session.close()
+    pass
 
 
 
-# Initialize database with temporary users
-init_db()
+# init_db is now called from main.py after table creation
